@@ -242,18 +242,49 @@ configurar_ssh() {
 
 
 # --- Flujo principal ---
-echo
-read -rp "[?] ¿Deseas configurar VLANs o interfaces de red? (s/n): " cfg_net
-if [[ "$cfg_net" =~ [sS]$ ]]; then
-	detectar_os
-	establecer_interfaces
-else
-	echo "[*] Saltando la configuración de red..."
-fi
+#echo
+#read -rp "[?] ¿Deseas configurar VLANs o interfaces de red? (s/n): " cfg_net
+#if [[ "$cfg_net" =~ [sS]$ ]]; then
+#	detectar_os
+#	establecer_interfaces
+#else
+#	echo "[*] Saltando la configuración de red..."
+#fi
+#
+#read -rp "[?] ¿Deseas configurar SSH? (s/n): " cfg_ssh
+#if [[ "$cfg_ssh" =~ ^[sS]$ ]]; then
+#    configurar_ssh
+#fi
 
-read -rp "[?] ¿Deseas configurar SSH? (s/n): " cfg_ssh
-if [[ "$cfg_ssh" =~ ^[sS]$ ]]; then
-    configurar_ssh
-fi
+while true; do
+    CHOICE=$(whiptail --title "Configurador del Sistema" --menu "Selecciona una opción:" 20 70 10 \
+        "1" "Configurar red / VLANs" \
+        "2" "Configurar SSH" \
+        "3" "Salir" 3>&1 1>&2 2>&3)
+
+    exitstatus=$?
+    if [ $exitstatus != 0 ]; then
+        echo "Cancelado por el usuario."
+        exit 1
+    fi
+
+    case $CHOICE in
+        1)
+            detectar_os
+            establecer_interfaces
+            ;;
+        2)
+            configurar_ssh
+            ;;
+        3)
+            echo "Saliendo del configurador..."
+            exit 0
+            ;;
+        *)
+            whiptail --msgbox "Opción inválida." 8 40
+            ;;
+    esac
+done
+
 
 

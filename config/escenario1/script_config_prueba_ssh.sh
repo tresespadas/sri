@@ -235,8 +235,15 @@ configurar_ssh() {
 
 
 # --- Flujo principal ---
-detectar_os
-establecer_interfaces
+echo
+read -rp "[?] ¿Deseas configurar VLANs o interfaces de red? (s/n): " cfg_net
+if [[ "$cfg_net" =~ [sS]$ ]]; then
+	detectar_os
+	establecer_interfaces
+else
+	echo "[*] Saltando la configuración de red..."
+fi
+
 read -rp "[?] ¿Deseas configurar SSH también? (s/n): " cfg_ssh
 if [[ "$cfg_ssh" =~ ^[sS]$ ]]; then
     configurar_ssh

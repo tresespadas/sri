@@ -120,7 +120,7 @@ generar_netplan() {
     } | sudo tee "$file" > /dev/null
 
     echo "[✓] Archivo Netplan generado correctamente en: $file"
-    echo "[ℹ️] Ejecuta: sudo netplan apply"
+    echo "[!] Ejecuta: sudo netplan apply"
 }
 
 generar_interfaces_debian() {
@@ -139,6 +139,9 @@ generar_interfaces_debian() {
         echo "auto lo"
         echo "iface lo inet loopback"
         echo
+        echo "auto ens18"
+        echo "iface ens18 inet dhcp"
+        echo
         for iface in "${!cfg[@]}"; do
             ip_addr="${cfg[$iface]}"
             echo "auto $iface"
@@ -149,7 +152,7 @@ generar_interfaces_debian() {
     } | sudo tee "$file" > /dev/null
 
     echo "[✓] Archivo de configuración generado en: $file"
-    echo "[ℹ️] Ejecuta: sudo systemctl restart networking"
+    echo "[!] Ejecuta: sudo systemctl restart networking"
 }
 
 configurar_ssh() {

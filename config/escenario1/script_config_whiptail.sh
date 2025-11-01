@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Comprobación automática de whiptail ---
+if ! command -v whiptail >/dev/null 2>&1; then
+    echo "[!] whiptail no está instalado. Instalándolo..."
+    if [[ -f /etc/debian_version ]]; then
+        sudo apt update -y && sudo apt install -y whiptail
+        echo "[✓] whiptail instalado correctamente."
+    else
+        echo "[✗] No se pudo detectar un sistema compatible para instalación automática."
+        echo "    Instálalo manualmente e inténtalo de nuevo."
+        exit 1
+    fi
+else
+    echo "[✓] whiptail detectado correctamente."
+fi
+
 NETPLAN_FILE="/etc/netplan/99-interfaces.yaml"
 DEBIAN_FILE="/etc/network/interfaces"
 OS="Desconocido"

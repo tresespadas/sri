@@ -21,7 +21,7 @@ detectar_os() {
     fi
 }
 
-establecer_interfaces() {
+establecer_vlan() {
     mapfile -t interfaces < <(ip -br a | awk 'NR>2 {print $1}')
 
     if [[ ${#interfaces[@]} -eq 0 ]]; then

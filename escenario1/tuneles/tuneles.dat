@@ -1,3 +1,4 @@
+# INDIRECTOS: VIDEO-CLASE 2GS-ASIR-SRI-JUEVES-4ªH+5ªH-20251023
 # Desde la máquina alvaroHDeb66(755) visitar el portal web de la alvaroSUbu11[1180]
 
 ## Origen del tráfico: alvaroHDeb66 
@@ -17,5 +18,9 @@ Prueba(alvaroHDeb6): w3m http://192.168.222.55:12345
 99: w3m http://127.0.0.1:9001
 
 # Desde la máquina 22 llegar hasta la 77 y hacer la prueba en el 11
+22: ssh -p 1122 -R 127.0.0.1:9002:127.0.0.1:9001 root@192.168.111.11
+22: ssh -p 5522 -L 127.0.0.1:9001:127.0.0.1:9002 root@192.168.111.55
+44: ssh -p 5522 -R 127.0.0.1:9002:192.168.0.77:7780 root@172.26.222.55
+Prueba(11): w3m http://127.0.0.1:9002
 
 # Desde la máquina 66 a la 99 pasando vlan5

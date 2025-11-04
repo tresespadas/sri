@@ -1,0 +1,31 @@
+Estás en nombreHDeb66 y necesitas conectarte por SSH al equipo nombreSUbu11, pero solo tienes acceso SSH al servidor nombreSDeb55.
+¿Qué tipo de túnel configurarías y entre qué máquinas?
+
+
+
+Desde nombreHUbu22 quieres abrir en tu navegador local la página web servida por nombreSUbu33 en el puerto 3380, pasando por nombreSDeb55.
+¿Qué reenvío de puertos deberías montar?
+
+Te encuentras en nombreHWin44 y quieres montar el sistema de archivos de nombreSUbu77 (puerto SSH 7722) mediante SSHFS, pero el firewall impide el acceso directo.
+¿Qué túnel SSH te permitiría hacerlo?
+
+Desde nombreHDeb88 necesitas copiar con SCP un archivo hacia apellido5.es, pero solo puedes saltar a través de nombreSDeb55.
+¿Cómo podrías realizar esa transferencia sin abrir sesión SSH intermedia?
+
+Estás en nombreHUbu22 y quieres exponer tu servidor local HTTP (puerto 8080) para que nombreSDeb55 pueda acceder a él desde su red.
+¿Qué tipo de túnel usarías y cómo?
+
+Desde nombreSDeb99, quieres conectarte al servicio web del host apellido7.inf (en la red 172.26.0.0/24) a través de nombreSUbu77.
+¿Cómo podrías hacerlo usando un túnel SSH directo?
+
+Supón que desde nombreHWin44 quieres acceder por SSH al host nombreSUbu33, pero tu máquina Windows no tiene cliente SSH avanzado.
+¿Qué túnel podrías preparar desde otro equipo Linux intermedio para que el Windows se conecte como si fuera local?
+
+Desde nombreSUbu77 necesitas realizar una copia scp de un archivo hacia nombreHUbu22, pero el puerto 22 está bloqueado y solo el 7722 está permitido.
+¿Qué configuración de túnel podrías usar para completar la transferencia?
+
+Desde apellido2.sys necesitas montar el sistema de archivos remoto de nombreSUbu33 (SSHFS) en tu equipo, pero el único nodo al que puedes acceder directamente es nombreSDeb55.
+¿Cómo plantearías el túnel para conseguirlo?
+
+Desde nombreHDeb88 quieres acceder al servidor web (HTTP 5580) que corre en nombreSDeb55, pero el puerto 5580 no está accesible directamente por firewall.
+¿Cómo podrías tunelizarlo usando SSH?

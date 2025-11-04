@@ -1,0 +1,21 @@
+# Desde la máquina alvaroHDeb66(755) visitar el portal web de la alvaroSUbu11[1180]
+
+## Origen del tráfico: alvaroHDeb66 
+## Destino del tráfico: alvaroSUbu11
+## Entrada del tunel: alvaroSDeb55
+## Salida del tunel: alvaroSUbu11
+
+Comando(alvaroSDeb55): ssh -p 1122 -L 192.168.222.55:12345:127.0.0.1:1180 root@192.168.111.11
+Prueba(alvaroHDeb6): w3m http://192.168.222.55:12345
+
+# Desde la 99 visitar la web de la 11
+# origen 99
+# destino 11
+# entrada 99
+# salida 55
+99: ssh -p 5522 -L 127.0.0.1:9001:192.168.111.11:1180 root@192.168.222.55
+99: w3m http://127.0.0.1:9001
+
+# Desde la máquina 22 llegar hasta la 77 y hacer la prueba en el 11
+
+# Desde la máquina 66 a la 99 pasando vlan5

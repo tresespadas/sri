@@ -1,0 +1,84 @@
+1. Desde el la maquina SRV44 visitar el portal web de la maquina SRV55.
+# Origen: 44
+# Destino: 55
+# Entrada: 44
+# Salida: 55
+# Directo
+### 44: ssh -p -L 2255 127.0.0.1:9000:127.0.0.1:8055 root@2.20.200.55 ###
+
+2. Desde el la maquina SRV22 visitar el portal web de la maquina SRV55.
+# Origen: 22
+# Destino: 55
+# Entrada: 44
+# Salida: 55
+# Directo
+### 44: ssh -p -L 2255 1.11.111.44:9001:127.0.0.1:8055 root@2.20.200.55 ###
+### 22: w3m http://1.11.111.44:9001
+
+3. Desde el la maquina SRV44 visitar el portal web de la maquina SRV66.
+# Origen: 44
+# Destino: 66
+# Entrada: 55
+# Salida: 66
+# Directo
+### 55: ssh -p 2266 2.20.200.55:9002:2.22.222.66:8066 root@2.22.222.66 ###
+### 44: w3m http://2.20.200.55:9002
+
+4. Desde el la maquina SRV22 visitar el portal web de la maquina SRV66.
+# origen 22
+# destino 66
+# entrada 44
+# salida 55
+# directo
+44: ssh -p 2255 -L 1.11.111.44:9003:2.22.222.66:8066 root@2.20.200.55
+22: w3m http://1.11.111.44:9003
+
+5. Desde el la maquina SRV55 visitar el portal web de la maquina SRV44.
+# origen 55
+# destino 44
+# entrada 55
+# salida 44
+# inverso
+44: ssh -p 2255 -R 127.0.0.1:9001:127.0.0.1:8044 root@2.20.200.55
+55: w3m http://127.0.0.1:9001
+
+6. Desde el la maquina SRV55 visitar el portal web de la maquina SRV22.
+# origen 55
+# destino 22
+# entrada 55
+# salida 44
+# inverso
+44: ssh -p 2255 -R 127.0.0.1:9001:1.11.111.22:8022 root@2.20.200.55
+55: w3m http://127.0.0.1:9001
+
+7. Desde el la maquina SRV66 visitar el portal web de la maquina SRV22.
+# origen 66
+# destino 22
+# entrada 55
+# salida 44
+#inverso
+44: ssh -p 2255 -R 2.22.222.55:9001:1.11.111.22:8022 root@2.20.200.55
+66: w3m http://2.22.222.55:9001
+
+8. Desde el la maquina SRV22 copiar la carpeta /home/user22/DOCS a /home/user66/ de SRV66.
+# origen 22
+# destino 66
+# entrada 44
+# salida 55
+# directo
+44: ssh -p 2255 -L 1.11.111.44:9001:2.22.222.66 root@2.20.200.55
+22: scp -P 9001 /home/user22/DOCS -r user66@1.11.111.44:/home/user66
+
+9. Desde el la maquina WIN10 visitar PORTAL WEB de la SRV66.
+
+10. Desde el la maquina WIN10 visitar PORTAL WEB de la SRV22, tomando como clienteSSH SRV44 y servidorSSH SRV55.
+
+11. Desde el la maquina WIN10 acceder por SSH a la SRV66.
+
+12. Montar en /home/user22/SSHFS/ de SRV22 la carpeta /home/user66/APUNTES de la SRV66.
+
+13. Desde la SRV11 acceder al portal web SRV77.
+
+14. Desde la SRV11 acceder al portal web SRV77 pero obligando a que al menos 1 de los túneles sea INVERSO.
+
+15. Desde la SRV11 acceder al portal web SRV77 pero obligando a que los 2 túneles sean INVERSO.

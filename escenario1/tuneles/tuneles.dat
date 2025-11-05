@@ -23,4 +23,18 @@ Prueba(alvaroHDeb6): w3m http://192.168.222.55:12345
 44: ssh -p 5522 -R 127.0.0.1:9002:192.168.0.77:7780 root@172.26.222.55
 Prueba(11): w3m http://127.0.0.1:9002
 
-# Desde la máquina 66 a la 99 pasando vlan5
+### Desde windows a arriba
+44: ssh -p 5522 root@172.26.222.55 -L 127.0.0.1:9003:192.168.111.11:9004
+22: ssh -p 1122 -R 192.168.111.11:9004:172.26.111.33:3322
+
+## La máquina77 tiene que ver la web de la 55
+# origen: 77
+# destino: 55
+# entrada: 44
+# salida: 55
+# directo
+44: ssh -p 7722 -R 192.168.0.77:12345:127.0.0.1:5522 root@192.168.0.77
+
+
+## Desde el 66 con 33 (nombre6,apellido7,nombre1)
+88: ssh -p 9922 -R 192.168.222.99

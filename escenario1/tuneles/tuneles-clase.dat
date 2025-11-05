@@ -82,3 +82,5 @@
 14. Desde la SRV11 acceder al portal web SRV77 pero obligando a que al menos 1 de los túneles sea INVERSO.
 
 15. Desde la SRV11 acceder al portal web SRV77 pero obligando a que los 2 túneles sean INVERSO.
+# cliente44 ; servidor22
+44: ssh -p 2222 1.10.100

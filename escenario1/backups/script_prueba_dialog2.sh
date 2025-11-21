@@ -358,7 +358,7 @@ establecer_vlan() {
       printf "%2d) %s\n" "$((i + 1))" "${interfaces[$i]}"
     done
     echo
-    echo "Usa estos números para elegir las interfaces."
+    #echo "Usa estos números para elegir las interfaces."
   } >"$TMP"
 
   dialog --title "Interfaces detectadas" --textbox "$TMP" 18 60

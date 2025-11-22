@@ -148,8 +148,11 @@ generar_interfaces_debian() {
     sudo systemctl restart networking.service
   fi
 }
+
 configurar_hosts() {
   local hosts_file="/etc/hosts"
+  local TMP
+  TMP=$(mktemp)
 
   dialog --title "Hosts" --infobox "Configuración de /etc/hosts..." 5 50
   sleep 1
@@ -159,65 +162,85 @@ configurar_hosts() {
   dialog --title "Backup" --msgbox "Copia de seguridad creada: ${hosts_file}.bak_$(date +%F_%T)" 6 70
 
   #
-  # Preguntar IP
+  # 1) Preguntar cuántas líneas hosts se van a insertar
   #
   while true; do
-    ip=$(dialog --title "Agregar entrada al hosts" \
-      --inputbox "Introduce la IP:" 10 60 \
-      3>&1 1>&2 2>&3)
+    num_hosts=$(dialog --title "Entradas en /etc/hosts" \
+      --inputbox "¿Cuántas líneas deseas agregar al archivo /etc/hosts?" \
+      10 60 3>&1 1>&2 2>&3)
+
     ret=$?
     [[ $ret -ne 0 ]] && return 1
 
-    if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    if [[ "$num_hosts" =~ ^[0-9]+$ ]] && ((num_hosts > 0)); then
       break
     fi
 
-    dialog --title "Error" --msgbox "IP inválida." 7 40
+    dialog --title "Error" --msgbox "Debes introducir un número válido mayor que 0." 7 50
   done
 
   #
-  # Preguntar hostname
+  # 2) Bucle para pedir cada IP + FQDN
   #
-  nombre=$(dialog --title "Agregar entrada al hosts" \
-    --inputbox "Introduce el nombre (hostname) asociado a la IP:" 10 60 \
-    3>&1 1>&2 2>&3) || return 1
+  for ((i = 1; i <= num_hosts; i++)); do
 
-  if [[ -z "$nombre" ]]; then
-    dialog --title "Error" --msgbox "El nombre no puede estar vacío." 6 40
-    return 1
-  fi
+    # Pedir IP
+    while true; do
+      ip=$(dialog --title "Entrada #$i" \
+        --inputbox "Introduce la IP (ejemplo: 192.168.1.50):" 10 60 \
+        3>&1 1>&2 2>&3)
+
+      ret=$?
+      [[ $ret -ne 0 ]] && return 1
+
+      if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        break
+      fi
+
+      dialog --title "Error" --msgbox "La IP no es válida." 7 40
+    done
+
+    # Pedir FQDN
+    fqdn=$(dialog --title "Entrada #$i" \
+      --inputbox "Introduce el FQDN (ej: mi-servidor.example.com):" 10 60 \
+      3>&1 1>&2 2>&3) || return 1
+
+    if [[ -z "$fqdn" ]]; then
+      dialog --title "Error" --msgbox "El FQDN no puede estar vacío." 7 40
+      ((i--))
+      continue
+    fi
+
+    # Derivar hostname corto automáticamente
+    hostname_short="${fqdn%%.*}"
+
+    # Evitar duplicados
+    if grep -qE "^$ip\s+.*\b$fqdn\b" "$hosts_file"; then
+      dialog --title "Aviso" --msgbox "La entrada ya existe:\n$ip $fqdn" 8 60
+      continue
+    fi
+
+    # Insertar al final del archivo
+    echo "$ip $fqdn $hostname_short" | sudo tee -a "$hosts_file" >/dev/null
+  done
 
   #
-  # Si ya existe la entrada, avisar y no duplicar
+  # 3) Preguntar si desea cambiar el hostname del sistema al último FQDN introducido
   #
-  if grep -qE "^$ip\s+$nombre(\s|$)" "$hosts_file"; then
-    dialog --title "Hosts" --msgbox "La entrada ya existe en /etc/hosts:\n\n$ip $nombre" 10 60
-  else
-    #
-    # Append seguro (al final)
-    #
-    echo "$ip $nombre" | sudo tee -a "$hosts_file" >/dev/null
-    dialog --title "Hosts" --msgbox "Entrada agregada:\n\n$ip $nombre" 8 60
-  fi
-
-  #
-  # Preguntar si quiere cambiar el hostname del sistema
-  #
-  if yesno_box "Hostname" "¿Deseas cambiar el hostname de la máquina a '$nombre'?"; then
-    if sudo hostnamectl set-hostname "$nombre"; then
-      dialog --title "Hostname" --msgbox "Hostname cambiado correctamente a: $nombre" 7 60
+  if yesno_box "Cambiar hostname" \
+    "¿Deseas cambiar el hostname del sistema a:\n\n$fqdn\n\n?"; then
+    if sudo hostnamectl set-hostname "$fqdn"; then
+      dialog --title "Hostname" --msgbox "Hostname cambiado a: $fqdn" 7 60
     else
       dialog --title "Error" --msgbox "No se pudo cambiar el hostname." 7 60
     fi
   fi
 
   #
-  # Mostrar hosts final
+  # 4) Mostrar el contenido final del archivo hosts
   #
-  TMP=$(mktemp)
   cp "$hosts_file" "$TMP"
-
-  dialog --title "Contenido de /etc/hosts" --textbox "$TMP" 20 70
+  dialog --title "/etc/hosts actualizado" --textbox "$TMP" 25 70
   rm -f "$TMP"
 }
 

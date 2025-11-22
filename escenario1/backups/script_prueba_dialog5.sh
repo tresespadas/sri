@@ -554,10 +554,10 @@ while true; do
   OPCION=$(dialog --title "Configurador del Servidor" \
     --menu "Selecciona una opción:" 15 70 6 \
     1 "Configurar VLANs / Interfaces" \
-    1 "Configurar /etc/hosts y hostname" \
-    2 "Configurar SSH" \
-    3 "Configurar Apache (web estática)" \
-    4 "Salir" \
+    2 "Configurar /etc/hosts y hostname" \
+    3 "Configurar SSH" \
+    4 "Configurar Apache (web estática)" \
+    5 "Salir" \
     3>&1 1>&2 2>&3) || {
     # Si user cancela el menú principal, preguntamos confirmación para salir
     if yesno_box "Salir" "¿Deseas salir del configurador?"; then

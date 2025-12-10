@@ -79,7 +79,7 @@ verificar_e_instalar_sudo() {
   if [[ "$(id -u)" -eq 0 ]]; then
     if [[ "$OS" == "Ubuntu" || "$OS" == "Debian" ]]; then
       info "Ejecutando como root, se instalará 'sudo' a través de apt."
-      apt-get update -y
+      apt-get update && true
       apt-get install -y sudo
       info "'sudo' ha sido instalado. Se recomienda salir y volver a ejecutar el script con un usuario con privilegios de sudo."
     else

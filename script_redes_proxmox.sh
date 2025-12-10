@@ -447,6 +447,7 @@ detectar_os
 verificar_e_instalar_sudo
 
 while true; do
+  clear
   echo
   echo "--- Configurador del Servidor ---"
   echo "1) Configurar VLANs / Interfaces"

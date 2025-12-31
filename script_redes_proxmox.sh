@@ -318,55 +318,195 @@ configurar_apache() {
     fi
   fi
 
-  local apache_port
-  local server_name
-  local redes
-  input "Puerto para Apache" "80" apache_port
-  input "Nombre del servidor (ej. SYSTEM-XY)" "SYSTEM-XY" server_name
+  # Puerto personalizado
+  read -rp "[+] Puerto para Apache (por defecto 80): " apache_port
+  apache_port=${apache_port:-80}
 
-  local redes_detectadas=$(ip -4 -br a | awk '!/lo|ens18/ {print $3}' | sed 's|/[0-9]\\$|/24;|' | tr '\n' ' ')
+  # Nombre del servidor
+  read -rp "[+] Nombre del servidor (por ejemplo SYSTEM-XY): " server_name
+  server_name=${server_name:-SYSTEM-XY}
+
+  # Detectar redes automáticamente (solo IPv4, sin loopback ni ens18)
+  echo "[*] Detectando redes activas (IPv4, sin loopback ni ens18)..."
+  redes_detectadas=$(
+    ip -4 -br addr show up |
+      awk '!/lo/ && !/ens18/ {print $3}' |
+      grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]+' |
+      sed 's|/[0-9]\+$|/24;|' |
+      tr '\n' ' '
+  )
   redes_detectadas=${redes_detectadas:-"192.168.1.0/24;"}
-  input "Redes (separadas por espacio)" "$redes_detectadas" redes
 
-  local site_name="server_${server_name,,}"
-  local site_dir="/var/www/${site_name}"
+  echo "[*] Redes detectadas: $redes_detectadas"
+  read -rp "[+] Redes (por defecto las detectadas): " redes
+  redes=${redes:-$redes_detectadas}
 
+  # Nombre del sitio
+  site_name="server_${server_name,,}"
+  site_dir="/var/www/${site_name}"
+
+  # Crear directorio web y contenido HTML
   sudo mkdir -p "$site_dir"
 
   sudo bash -c "cat > ${site_dir}/index.html" <<EOF
-<!DOCTYPE html> 
-<html><head><title>SERVER ${server_name}</title></head>
-<body><h1>WEBSITE SERVIDOR ${server_name}</h1>
-<p>RED: ${redes}</p><p>PUERTO: ${apache_port}</p>
-</body></html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>SERVER ${server_name}</title>
+  <style type="text/css" media="screen">
+* {
+  margin: 0;
+  padding: 0;
+}
+
+body, html {
+  padding: 3px;
+  background-color: #D8DBE2;
+  font-family: Verdana, sans-serif;
+  font-size: 11pt;
+  text-align: center;
+}
+
+div.main_page {
+  position: relative;
+  display: table;
+  width: 800px;
+  margin: 0 auto 3px auto;
+  border: 2px solid #212738;
+  background-color: #FFFF00;
+  text-align: center;
+}
+
+div.page_header {
+  height: 99px;
+  width: 100%;
+  background-color: #FFFF00;
+}
+
+div.page_header span {
+  margin: 15px 0px 0px 50px;
+  font-size: 180%;
+  font-weight: bold;
+}
+
+div.page_header img {
+  margin: 3px 0px 0px 40px;
+  border: 0;
+}
+
+div.section_header {
+  padding: 3px 6px;
+  background-color: #90EE90;
+  color: #FFFFFF;
+  font-weight: bold;
+  font-size: 112%;
+  text-align: center;
+}
+
+div.section_header_red {
+  background-color: #EE82EE;
+}
+
+.floating_element {
+  position: relative;
+  float: left;
+}
+  </style>
+</head>
+<body>
+  <div class="main_page">
+    <div class="page_header floating_element">
+      <img src="/icons/openlogo-75.png" alt="Debian Logo" class="floating_element"/>
+      <span class="floating_element">
+    WEBSITE SERVIDOR ${server_name}
+      </span>
+    </div>
+      <div class="section_header section_header_red">
+          RED: ${redes}
+      </div>
+
+      <div class="section_header">
+              PUERTO: ${apache_port}
+      </div>
+  </div>
+</body>
+</html>
 EOF
 
   sudo chown -R www-data:www-data "$site_dir"
-  local conf_file="/etc/apache2/sites-available/${site_name}.conf"
+
+  # Crear configuración del sitio
+  conf_file="/etc/apache2/sites-available/${site_name}.conf"
 
   sudo bash -c "cat > $conf_file" <<EOF
 <VirtualHost *:${apache_port}>
-    ServerAdmin webmaster@localhost
-    DocumentRoot ${site_dir}
-    ErrorLog {APACHE_LOG_DIR}/${site_name}_error.log
-    CustomLog {APACHE_LOG_DIR}/${site_name}_access.log combined
+  ServerAdmin webmaster@localhost
+  DocumentRoot ${site_dir}
+  ErrorLog \${APACHE_LOG_DIR}/${site_name}_error.log
+  CustomLog \${APACHE_LOG_DIR}/${site_name}_access.log combined
 </VirtualHost>
 EOF
 
+  # Aseguramos que el puerto esté en /etc/apache2/ports.conf
   if ! grep -q "Listen ${apache_port}" /etc/apache2/ports.conf; then
     echo "Listen ${apache_port}" | sudo tee -a /etc/apache2/ports.conf >/dev/null
   fi
 
-  sudo a2ensite "${site_name}.conf" >/dev/null || true
-  sudo systemctl reload apache2 || true
-  sudo systemctl enable apache2 || true
+  # Activar sitio y reiniciar Apache
+  sudo a2ensite "${site_name}.conf" >/dev/null
+  sudo systemctl reload apache2
+  sudo systemctl enable apache2
 
-  info "Apache configurado:"
-  echo "  Servidor: ${server_name}"
-  echo "  Sitio: ${site_name}"
-  echo "  Ruta: ${site_dir}"
-  echo "  Puerto: ${apache_port}"
-  echo "  URL: http://<tu_ip>:${apache_port}/"
+  #  local apache_port
+  #  local server_name
+  #  local redes
+  #  input "Puerto para Apache" "80" apache_port
+  #  input "Nombre del servidor (ej. SYSTEM-XY)" "SYSTEM-XY" server_name
+  #
+  #  local redes_detectadas=$(ip -4 -br a | awk '!/lo|ens18/ {print $3}' | sed 's|/[0-9]\\$|/24;|' | tr '\n' ' ')
+  #  redes_detectadas=${redes_detectadas:-"192.168.1.0/24;"}
+  #  input "Redes (separadas por espacio)" "$redes_detectadas" redes
+  #
+  #  local site_name="server_${server_name,,}"
+  #  local site_dir="/var/www/${site_name}"
+  #
+  #  sudo mkdir -p "$site_dir"
+  #
+  #  sudo bash -c "cat > ${site_dir}/index.html" <<EOF
+  #<!DOCTYPE html>
+  #<html><head><title>SERVER ${server_name}</title></head>
+  #<body><h1>WEBSITE SERVIDOR ${server_name}</h1>
+  #<p>RED: ${redes}</p><p>PUERTO: ${apache_port}</p>
+  #</body></html>
+  #EOF
+  #
+  #  sudo chown -R www-data:www-data "$site_dir"
+  #  local conf_file="/etc/apache2/sites-available/${site_name}.conf"
+  #
+  #  sudo bash -c "cat > $conf_file" <<EOF
+  #<VirtualHost *:${apache_port}>
+  #    ServerAdmin webmaster@localhost
+  #    DocumentRoot ${site_dir}
+  #    ErrorLog {APACHE_LOG_DIR}/${site_name}_error.log
+  #    CustomLog {APACHE_LOG_DIR}/${site_name}_access.log combined
+  #</VirtualHost>
+  #EOF
+  #
+  #  if ! grep -q "Listen ${apache_port}" /etc/apache2/ports.conf; then
+  #    echo "Listen ${apache_port}" | sudo tee -a /etc/apache2/ports.conf >/dev/null
+  #  fi
+  #
+  #  sudo a2ensite "${site_name}.conf" >/dev/null || true
+  #  sudo systemctl reload apache2 || true
+  #  sudo systemctl enable apache2 || true
+  #
+  #  info "Apache configurado:"
+  #  echo "  Servidor: ${server_name}"
+  #  echo "  Sitio: ${site_name}"
+  #  echo "  Ruta: ${site_dir}"
+  #  echo "  Puerto: ${apache_port}"
+  #  echo "  URL: http://<tu_ip>:${apache_port}/"
 }
 
 establecer_vlan() {

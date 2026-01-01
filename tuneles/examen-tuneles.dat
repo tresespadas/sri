@@ -1,0 +1,11 @@
+# Ejercicios de tuneles SSH del examen 25/26 [Estudio para la recuperación]
+
+## Pregunta 1
+ORIGEN DEL TRÁFICO: S-55
+DESTINO DEL TRÁFICO: S-11
+ENTRADA DEL TÚNEL: S-55
+SALIDA DEL TÚNEL: H-22
+TIPO: INVERSOR
+
+(22): ssh -p 5522 -R 0.0.0.0:5522:192.168.111.11:9990 root@192.168.111.55
+

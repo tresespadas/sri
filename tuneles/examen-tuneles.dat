@@ -57,3 +57,10 @@ SOLUCIÓN:
 PRUEBA:
 (88): ssh -p 9993 localhost
       w3m http://172.26.222.55:5580 # Cuidado a ver si me entra por la otra interfaz (Probar a quitarla)
+
+# Pregunta 4 (Planteada)
+
+(55): ssh -p 9922 -L 192.168.111.55:9995:localhost:9922 root@192.168.222.99
+
+Tunel directo del 55 al 99 que abre un puerto en el 55[9995] para el cliente22
+Los demás clientes tienen conexión directa con el 99

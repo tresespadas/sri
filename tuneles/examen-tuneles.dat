@@ -48,3 +48,12 @@ Tunel1(44): PUTTY.EXE -P 5522 -R 172.26.222.55:9992:172.26.111.33:9991 root@172.
 SOLUCIÓN:
 (88): ssh -p 9992 alvaroca@172.26.222.55
 (88): w3m http://kernel.org
+
+# Pregunta 3 (DUDA)
+
+(88): ssh -p 7722 -R localhost:9993:192.168.0.77:9994 root@172.26.0.77
+(44): PUTTY.EXE -P 9994 -L 172.26.222.44:9995:192.168.0.77:9994 root@192.168.0.77
+
+PRUEBA:
+(88): ssh -p 9993 localhost
+      w3m http://172.26.222.55:5580 # Cuidado a ver si me entra por la otra interfaz (Probar a quitarla)

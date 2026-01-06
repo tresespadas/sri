@@ -7,5 +7,44 @@ ENTRADA DEL TÚNEL: S-55
 SALIDA DEL TÚNEL: H-22
 TIPO: INVERSO
 
-Túnel(22): ssh -p 5522 -R *:9990:192.168.111.11:1180 root@192.168.111.55 (Para probar el http)
+PRUEBA:
+Túnel(22): ssh -p 5522 -R *:9990:192.168.111.11:1180 root@192.168.111.55 (Para probar el http) 
 Comprobación(44,88): w3m http://172.26.222.55:9990
+
+Quiero probar si se puede hacer (sólo habilitando la red de apellido4.com): ssh -p 5522 -R 172.26.222.55:9990:192.168.111.11:1180 root@192.168.111.55
+
+SOLUCIÓN:
+Directorio(11): mkdir -p /home/alvaroca/EJ1/ && touch arch11.txt
+Túnel(22): ssh -p 5522 -R *:9990:192.168.111.11:1120 root@192.168.111.55
+
+1.) Subida de archivos:
+(88): scp -P 9990 arch88.txt alvaroca:172.26.222.55:/home/alvaroca/EJ1/
+(44): PSCP.EXE -P 9990 arch44.txt alvaroca:172.26.222.55:/home/alvaroca/EJ1/
+
+2.) Descarga de archivos:
+(88): scp -P 9990 alvaroca:172.26.222.55:/home/alvaroca/EJ1/arch11.txt ~/EJ1/
+(88): PSCP.EXE -P 9991 alvaroca:172.26.222.55:/home/alvaroca/EJ1/arch11.txt C:/Documentos/EJ1/
+
+## Pregunta 2
+
+TUNEL1
+ORIGEN DEL TRÁFICO: S-33
+DESTINO DEL TRÁFICO: S-11
+ENTRADA DEL TÚNEL: S-33
+SALIDA DEL TÚNEL: H-22
+TIPO: INVERSO
+
+Tunel1(22): ssh -p 3322 -R 172.26.222.33:9991:192.168.111.11:1122 root@172.26.111.33
+
+TUNEL2
+ORIGEN DEL TRÁFICO: S-55
+DESTINO DEL TRÁFICO: S-33
+ENTRADA DEL TÚNEL: H-44
+SALIDA DEL TÚNEL: S-33
+TIPO: INVERSO
+
+Tunel1(44): PUTTY.EXE -P 5522 -R 172.26.222.55:9992:172.26.111.33:9991 root@172.26.111.55
+
+SOLUCIÓN:
+(88): ssh -p 9992 alvaroca@172.26.222.55
+(88): w3m http://kernel.org

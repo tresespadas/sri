@@ -64,3 +64,13 @@ PRUEBA:
 
 Tunel directo del 55 al 99 que abre un puerto en el 55[9995] para el cliente22
 Los demás clientes tienen conexión directa con el 99
+
+# Pregunta 5
+
+b. (55): ssh -p 5522 -L localhost:9996:localhost:5580 root@localhost
+f. (88): ssh -p 7722 -R 172.26.0.77:9997:192.168.33.99:9980 root@172.26.0.77
+  (88): w3m http://172.26.0.77:9997 (Página de la 99)
+
+# Pregunta 6
+
+(88): ssh -p 5522 -R *:9998:172.26.0.77:7780 root@172.26.222.55

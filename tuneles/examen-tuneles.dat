@@ -7,23 +7,15 @@ ENTRADA DEL TÚNEL: S-55
 SALIDA DEL TÚNEL: H-22
 TIPO: INVERSO
 
-PRUEBA:
-Túnel(22): ssh -p 5522 -R *:9990:192.168.111.11:1180 root@192.168.111.55 (Para probar el http) 
-Comprobación(44,88): w3m http://172.26.222.55:9990
-
-Quiero probar si se puede hacer (sólo habilitando la red de apellido4.com): ssh -p 5522 -R 172.26.222.55:9990:192.168.111.11:1180 root@192.168.111.55
-
-SOLUCIÓN:
-Directorio(11): mkdir -p /home/alvaroca/EJ1/ && touch arch11.txt
-Túnel(22): ssh -p 5522 -R *:9990:192.168.111.11:1120 root@192.168.111.55
+Túnel(22): ssh -p 5522 -R 172.26.222.55:9990:192.168.111.11:1120 root@192.168.111.55
 
 1.) Subida de archivos:
-(88): scp -P 9990 arch88.txt alvaroca:172.26.222.55:/home/alvaroca/EJ1/
-(44): PSCP.EXE -P 9990 arch44.txt alvaroca:172.26.222.55:/home/alvaroca/EJ1/
+(88): scp -P 9990 arch88.txt alvaroca@172.26.222.55:/home/alvaroca/EJ1/
+(44): PSCP.EXE -P 9990 arch44.txt alvaroca@172.26.222.55:/home/alvaroca/EJ1/
 
 2.) Descarga de archivos:
-(88): scp -P 9990 alvaroca:172.26.222.55:/home/alvaroca/EJ1/arch11.txt ~/EJ1/
-(88): PSCP.EXE -P 9991 alvaroca:172.26.222.55:/home/alvaroca/EJ1/arch11.txt C:/Documentos/EJ1/
+(88): scp -P 9990 alvaroca@172.26.222.55:/home/alvaroca/EJ1/arch11.txt ~/EJ1/
+(44): PSCP.EXE -P 9990 alvaroca@172.26.222.55:/home/alvaroca/EJ1/arch11.txt ./
 
 ## Pregunta 2
 

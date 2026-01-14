@@ -41,14 +41,15 @@ SOLUCIÓN:
 (88): ssh -p 9992 alvaroca@172.26.222.55
 (88): w3m http://kernel.org
 
-# Pregunta 3 (DUDA)
+# Pregunta 3
 
-(88): ssh -p 7722 -R localhost:9993:192.168.0.77:9994 root@172.26.0.77
-(44): PUTTY.EXE -P 9994 -L 172.26.222.44:9995:192.168.0.77:9994 root@192.168.0.77
+Como los clientes no tienen ningún servicio que tunelizar. Tunelizaré el propio SSH.
+La idea es que la máquina Win44 pueda acceder a Deb88
 
-PRUEBA:
-(88): ssh -p 9993 localhost
-      w3m http://172.26.222.55:5580 # Cuidado a ver si me entra por la otra interfaz (Probar a quitarla)
+Tunel1 (88): ssh -p 7722 -R 192.168.0.77:9990:172.26.0.88:22 alvaroca@172.26.0.77
+Tunel2 (44): PUTTY.EXE -P 7722 -L 192.168.0.44:9991:192.168.0.77:9990 alvaroca@192.168.0.77
+
+Solución (44): PUTTY.EXE -P 9991 alvaroca@192.168.0.44
 
 # Pregunta 4 (Planteada)
 

@@ -62,6 +62,8 @@ Solución (22): sshfs -p 9995 root@192.168.111.55:/media/HDALUMNO/ /mnt/HDALUMNO
 # Pregunta 5
 
 b. Tunel (55): ssh -p 5522 -L localhost:9996:localhost:5580 root@localhost
+Solución (55): w3m http://localhost:9996
+
 f. Tunel (88): ssh -p 9922 -L 172.26.0.88:9997:192.168.33.99:9980 root@192.168.33.99
   Solución (77): w3m http://172.26.0.88:9997 (Página de la 99)
 

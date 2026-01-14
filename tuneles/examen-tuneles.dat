@@ -53,17 +53,19 @@ Solución (44): PUTTY.EXE -P 9991 alvaroca@192.168.0.44
 
 # Pregunta 4 (Planteada)
 
-(55): ssh -p 9922 -L 192.168.111.55:9995:localhost:9922 root@192.168.222.99
+Tunel1 (55): ssh -p 9922 -L 192.168.111.55:9995:localhost:9922 root@192.168.222.99
 
-Tunel directo del 55 al 99 que abre un puerto en el 55[9995] para el cliente22
-Los demás clientes tienen conexión directa con el 99
+Solución (22): sshfs -p 9995 root@192.168.111.55:/media/HDALUMNO/ /mnt/HDALUMNO
+(66): sshfs -p 9922 root@192.168.222.99:/media/HDALUMNO/ /mnt/HDALUMNO
+(88): sshfs -p 9922 root@192.168.222.99:/media/HDALUMNO/ /mnt/HDALUMNO
 
 # Pregunta 5
 
-b. (55): ssh -p 5522 -L localhost:9996:localhost:5580 root@localhost
-f. (88): ssh -p 7722 -R 172.26.0.77:9997:192.168.33.99:9980 root@172.26.0.77
-  (88): w3m http://172.26.0.77:9997 (Página de la 99)
+b. Tunel (55): ssh -p 5522 -L localhost:9996:localhost:5580 root@localhost
+f. Tunel (88): ssh -p 9922 -L 172.26.0.88:9997:192.168.33.99:9980 root@192.168.33.99
+  Solución (77): w3m http://172.26.0.88:9997 (Página de la 99)
 
 # Pregunta 6
 
-(88): ssh -p 5522 -R *:9998:172.26.0.77:7780 root@172.26.222.55
+Tunel (88): ssh -p 5522 -R *:9998:172.26.0.77:7780 root@172.26.222.55
+Solución (22,66,44,88): w3m http://alvaroSDeb55:9998

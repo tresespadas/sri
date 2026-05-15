@@ -100,11 +100,26 @@ pedir_nameservers() {
   eval "$var_name=\"\${ns_arr[*]}\""
 }
 
-# Generar netplan (con nameservers opcionales)
+# Utilidad: convertir lista separada por espacios en formato inline YAML "[a, b, c]"
+_yaml_inline_list() {
+  local items="$1"
+  local list=""
+  for it in $items; do
+    if [[ -z "$list" ]]; then
+      list="$it"
+    else
+      list="$list, $it"
+    fi
+  done
+  echo "$list"
+}
+
+# Generar netplan (nameservers y search por interfaz)
 generar_netplan() {
   local file="$1"
   declare -n cfg="$2"
-  local nameservers="$3"
+  declare -n ns_map="$3"
+  declare -n search_map="$4"
 
   if [[ -f "$file" ]]; then
     cp "$file" "${file}.bak_$(date +%F_%T)"
@@ -116,20 +131,21 @@ generar_netplan() {
     echo "  version: 2"
     echo "  ethernets:"
     for iface in "${!cfg[@]}"; do
+      local nameservers="${ns_map[$iface]:-}"
+      local search_domains="${search_map[$iface]:-}"
       echo "    ${iface}:"
-      echo "      addresses:"
-      echo "        - ${cfg[$iface]}"
-      if [[ -n "$nameservers" ]]; then
+      echo "      optional: true"
+      echo "      dhcp4: false"
+      echo "      dhcp6: false"
+      echo "      addresses: [${cfg[$iface]}]"
+      if [[ -n "$nameservers" || -n "$search_domains" ]]; then
         echo "      nameservers:"
-        local list=""
-        for ns in $nameservers; do
-          if [[ -z "$list" ]]; then
-            list="$ns"
-          else
-            list="$list, $ns"
-          fi
-        done
-        echo "        addresses: [${list}]"
+        if [[ -n "$nameservers" ]]; then
+          echo "        addresses: [$(_yaml_inline_list "$nameservers")]"
+        fi
+        if [[ -n "$search_domains" ]]; then
+          echo "        search: [$(_yaml_inline_list "$search_domains")]"
+        fi
       fi
     done
   } >"$file"
@@ -143,7 +159,8 @@ generar_netplan() {
 generar_interfaces_debian() {
   local file="$1"
   declare -n cfg="$2"
-  local nameservers="$3"
+  declare -n ns_map="$3"
+  declare -n search_map="$4"
 
   local is_proxmox=0
   if [[ -d /etc/pve ]] || command -v pveversion >/dev/null 2>&1; then
@@ -182,10 +199,18 @@ generar_interfaces_debian() {
     fi
 
     for iface in "${!cfg[@]}"; do
-      ip_addr="${cfg[$iface]}"
-      echo "auto $iface"
+      local ip_addr="${cfg[$iface]}"
+      local nameservers="${ns_map[$iface]:-}"
+      local search_domains="${search_map[$iface]:-}"
+      echo "allow-hotplug $iface"
       echo "iface $iface inet static"
       echo "    address $ip_addr"
+      if [[ -n "$nameservers" ]]; then
+        echo "    dns-nameservers $nameservers"
+      fi
+      if [[ -n "$search_domains" ]]; then
+        echo "    dns-search $search_domains"
+      fi
       echo
     done
 
@@ -193,18 +218,33 @@ generar_interfaces_debian() {
 
   info "Archivo de configuración generado en: $file"
 
-  if [[ -n "$nameservers" ]]; then
+  # Para /etc/resolv.conf usamos la unión deduplicada de todas las interfaces
+  local all_ns=""
+  local all_search=""
+  for iface in "${!cfg[@]}"; do
+    for ns in ${ns_map[$iface]:-}; do
+      [[ " $all_ns " == *" $ns "* ]] || all_ns="${all_ns:+$all_ns }$ns"
+    done
+    for s in ${search_map[$iface]:-}; do
+      [[ " $all_search " == *" $s "* ]] || all_search="${all_search:+$all_search }$s"
+    done
+  done
+
+  if [[ -n "$all_ns" || -n "$all_search" ]]; then
     if [[ -f "$RESOLV_FILE" ]]; then
       cp "$RESOLV_FILE" "${RESOLV_FILE}.bak_$(date +%F_%T)"
       info "Copia de seguridad creada: ${RESOLV_FILE}.bak_$(date +%F_%T)"
     fi
     {
       echo "# Generado por $(basename "$0") - $(date)"
-      for ns in $nameservers; do
+      if [[ -n "$all_search" ]]; then
+        echo "search $all_search"
+      fi
+      for ns in $all_ns; do
         echo "nameserver $ns"
       done
     } >"$RESOLV_FILE"
-    info "Nameservers escritos en $RESOLV_FILE"
+    info "Nameservers/search escritos en $RESOLV_FILE"
   fi
 
   if ((is_proxmox)); then
@@ -303,6 +343,8 @@ establecer_vlan() {
   done
 
   declare -A iface_config
+  declare -A iface_ns
+  declare -A iface_search
   declare -A usadas
   for ((n = 1; n <= num_ifaces; n++)); do
     local iface_choice
@@ -332,26 +374,29 @@ establecer_vlan() {
         error "Formato de IP/CIDR no válido."
       fi
     done
-  done
 
-  local nameservers=""
-  if yesno "¿Configurar nameservers para estas interfaces?"; then
-    pedir_nameservers nameservers
-  fi
+    local ns_for_iface=""
+    local search_for_iface=""
+    if yesno "¿Configurar nameservers para $base_iface?"; then
+      pedir_nameservers ns_for_iface
+      input "Dominios de búsqueda para $base_iface (separados por espacios, vacío para omitir)" "" search_for_iface
+    fi
+    iface_ns["$base_iface"]="$ns_for_iface"
+    iface_search["$base_iface"]="$search_for_iface"
+  done
 
   echo "Resumen de la configuración:"
   for iface in "${!iface_config[@]}"; do
     echo "  $iface -> ${iface_config[$iface]}"
+    [[ -n "${iface_ns[$iface]:-}" ]] && echo "      nameservers: ${iface_ns[$iface]}"
+    [[ -n "${iface_search[$iface]:-}" ]] && echo "      search: ${iface_search[$iface]}"
   done
-  if [[ -n "$nameservers" ]]; then
-    echo "  Nameservers: $nameservers"
-  fi
 
   if yesno "¿Aplicar esta configuración?"; then
     if [[ "$OS" == "Ubuntu" ]]; then
-      generar_netplan "$NETPLAN_FILE" iface_config "$nameservers"
+      generar_netplan "$NETPLAN_FILE" iface_config iface_ns iface_search
     elif [[ "$OS" == "Debian" ]]; then
-      generar_interfaces_debian "$DEBIAN_FILE" iface_config "$nameservers"
+      generar_interfaces_debian "$DEBIAN_FILE" iface_config iface_ns iface_search
     else
       error "Sistema operativo no soportado para aplicar la configuración."
       return 1

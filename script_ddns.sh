@@ -546,6 +546,16 @@ EOF
   fi
 
   # --- named.conf.local: definir zonas (directa + inversa por red) ---
+  # Reset a cabecera limpia para evitar zonas duplicadas en re-ejecuciones.
+  # El contenido anterior queda guardado en ${named_local}.bak_*
+  cat >"$named_local" <<EOF
+//
+// Generado por $(basename "$0") - $(date)
+// El contenido anterior está en ${named_local}.bak_*
+//
+EOF
+  info "$named_local reseteado a cabecera limpia."
+
   local num_redes
   while true; do
     input "¿Cuántas redes vas a configurar?" "" num_redes

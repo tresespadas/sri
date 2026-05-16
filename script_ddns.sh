@@ -467,6 +467,39 @@ emit_file_subdominio() {
 EOF
 }
 
+# Generar fichero de zona inversa para un subdominio (stub: SOA + NS, sin PTR).
+# Se usa cuando la /24 del subdominio no contiene la IP del servidor DNS del padre.
+# Uso: emit_file_inversa_sub <out_file> <zona_inversa> <admin> <hostname_padre> <dominio_padre>
+emit_file_inversa_sub() {
+  local out_file="$1"
+  local zona_inversa="$2"
+  local admin="$3"
+  local hostname="$4"
+  local dominio="$5"
+  local serial
+  serial="$(date +%Y%m%d)01"
+
+  cat >"$out_file" <<EOF
+;
+; BIND reverse data file (subdominio)
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FICHERO DE BUSQUEDA INVERSA: ${zona_inversa}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+\$TTL    604800
+@    IN    SOA    ${zona_inversa}. ${admin}. (
+                  ${serial}        ; Serial
+             604800        ; Refresh
+              86400        ; Retry
+            2419200        ; Expire
+             604800 )    ; Negative Cache TTL
+
+;REGISTROS TIPO NS.
+@    IN    NS    ${hostname}.${dominio}.
+EOF
+}
+
 # Validar sintaxis de un fichero de zona con named-checkzone.
 # Uso: verificar_zona <zona> <fichero>
 verificar_zona() {
@@ -719,6 +752,7 @@ emit_dhcp_subnet() {
 }
 
 configurar_ddns() {
+  clear
   local dhcpd_conf="/etc/dhcp/dhcpd.conf"
   local named_local="/etc/bind/named.conf.local"
   local ddns_dir="/etc/bind/ddns"
@@ -811,114 +845,157 @@ EOF
 
   local num_redes
   while true; do
-    input "¿Cuántas redes vas a configurar?" "" num_redes
+    input "¿Cuántas redes /24 vas a configurar en TOTAL (padres + subdominios)?" "" num_redes
     if [[ "$num_redes" =~ ^[0-9]+$ ]] && ((num_redes > 0)); then
       break
     fi
     error "Debes introducir un número válido mayor que 0."
   done
-  info "Se generarán $((num_redes * 2)) zonas (directa + inversa por red)."
+
+  # Trackers: subredes ya declaradas (dedup) y datos de padres ya creados (para subdominios)
+  local -a redes_usadas=()
+  declare -A padre_hostname=()
+  declare -A padre_ip=()
+  declare -A padre_admin=()
 
   for ((r = 1; r <= num_redes; r++)); do
-    local dominio
-    local red
-    local oct1 oct2 oct3
+    echo
+    info "=== Red #$r de $num_redes ==="
 
-    while true; do
-      input "Red #$r - Nombre del dominio (zona directa, ej: example.com)" "" dominio
-      [[ -n "$dominio" ]] && break
-      error "El dominio no puede estar vacío."
-    done
-
+    local red oct1 oct2 oct3 red_cidr red_norm
     while true; do
       input "Red #$r - Red en formato X.X.X.0/24 (ej: 192.168.1.0/24)" "" red
       if [[ "$red" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.[0-9]{1,3}/24$ ]]; then
         oct1="${BASH_REMATCH[1]}"
         oct2="${BASH_REMATCH[2]}"
         oct3="${BASH_REMATCH[3]}"
+        red_norm="${oct1}.${oct2}.${oct3}.0/24"
+        local dup=0 u
+        for u in "${redes_usadas[@]}"; do
+          [[ "$u" == "$red_norm" ]] && { dup=1; break; }
+        done
+        if ((dup == 1)); then
+          error "La red ${red_norm} ya está declarada. Usa otra /24."
+          continue
+        fi
+        redes_usadas+=("$red_norm")
         break
       fi
       error "Formato inválido. Usa X.X.X.X/24"
     done
+    red_cidr="${oct1}.${oct2}.${oct3}.0/24"
 
     local zona_inversa="${oct3}.${oct2}.${oct1}.in-addr.arpa"
-    local file_directa="${ddns_dir}/db.${dominio}"
     local file_inversa="${ddns_dir}/db.${oct1}.${oct2}.${oct3}"
-    local red_cidr="${oct1}.${oct2}.${oct3}.0/24"
 
-    local rol_d="" master_ip_d=""
-    local rol_i="" master_ip_i=""
-    pedir_rol_zona "zona directa '${dominio}'" rol_d master_ip_d
-    pedir_rol_zona "zona inversa '${zona_inversa}'" rol_i master_ip_i
+    local tipo=""
+    while true; do
+      input "Red #$r - Tipo (padre/subdominio)" "padre" tipo
+      [[ "$tipo" == "padre" || "$tipo" == "subdominio" ]] && break
+      error "Debe ser 'padre' o 'subdominio'."
+    done
 
-    emit_zona "$dominio" "$file_directa" "$rol_d" "$master_ip_d" "$red_cidr" >>"$named_local"
-    emit_zona "$zona_inversa" "$file_inversa" "$rol_i" "$master_ip_i" "$red_cidr" >>"$named_local"
-
-    # Si alguna zona es master, generar los ficheros de zona desde plantilla
-    if [[ "$rol_d" == "master" || "$rol_i" == "master" ]]; then
-      local hostname_srv="" ip_srv="" admin_email="" cname_alias="" last_octet=""
-
-      input "Red #$r - Hostname del servidor DNS (sin dominio)" "serverddns" hostname_srv
+    if [[ "$tipo" == "padre" ]]; then
+      local dominio file_directa
       while true; do
-        input "Red #$r - IP del servidor DNS (dentro de ${red_cidr})" "" ip_srv
-        if [[ "$ip_srv" =~ ^${oct1}\.${oct2}\.${oct3}\.([0-9]{1,3})$ ]]; then
-          last_octet="${BASH_REMATCH[1]}"
-          break
-        fi
-        error "La IP debe pertenecer a ${red_cidr}"
+        input "Red #$r - Nombre del dominio (zona directa, ej: empresa.org)" "" dominio
+        [[ -n "$dominio" ]] && break
+        error "Vacío."
       done
-      input "Red #$r - Email admin (formato DNS, ej: admin.${dominio})" "admin.${dominio}" admin_email
-      if yesno "¿Añadir alias CNAME para ${hostname_srv}?"; then
-        input "  Nombre del alias" "" cname_alias
-      fi
+      file_directa="${ddns_dir}/db.${dominio}"
 
-      if [[ "$rol_d" == "master" ]]; then
-        emit_file_directa "$file_directa" "$dominio" "$admin_email" "$hostname_srv" "$ip_srv" "$cname_alias"
-        info "Fichero de zona directa creado: $file_directa"
-        verificar_zona "$dominio" "$file_directa"
-      fi
-      if [[ "$rol_i" == "master" ]]; then
-        emit_file_inversa "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio" "$last_octet"
-        info "Fichero de zona inversa creado: $file_inversa"
-        verificar_zona "$zona_inversa" "$file_inversa"
-      fi
+      local rol_d="" master_ip_d=""
+      local rol_i="" master_ip_i=""
+      pedir_rol_zona "zona directa '${dominio}'" rol_d master_ip_d
+      pedir_rol_zona "zona inversa '${zona_inversa}'" rol_i master_ip_i
 
-      # --- DHCP: subnet block para la red principal ---
-      emit_dhcp_subnet "$dhcpd_conf" "$dominio" "$dominio" "$red_cidr" "$ip_srv" "yes"
-      info "Bloque DHCP añadido para red ${dominio} (${red_cidr})."
+      emit_zona "$dominio" "$file_directa" "$rol_d" "$master_ip_d" "$red_cidr" >>"$named_local"
+      emit_zona "$zona_inversa" "$file_inversa" "$rol_i" "$master_ip_i" "$red_cidr" >>"$named_local"
 
-      # Subdominios delegados (solo si la directa es master)
-      if [[ "$rol_d" == "master" ]]; then
-        local subs_raw=""
-        input "Subdominios delegados de ${dominio} - SOLO el nombre, no el FQDN (ej: dpto101 dpto202; vacío para omitir)" "" subs_raw
-        if [[ -n "$subs_raw" ]]; then
-          local -a subs_arr=()
-          read -ra subs_arr <<<"$subs_raw"
-          for sub in "${subs_arr[@]}"; do
-            local sub_fqdn="${sub}.${dominio}"
-            local sub_file="${ddns_dir}/db.${sub_fqdn}"
+      if [[ "$rol_d" == "master" || "$rol_i" == "master" ]]; then
+        local hostname_srv="" ip_srv="" admin_email="" cname_alias="" last_octet=""
 
-            emit_file_subdominio "$sub_file" "$sub_fqdn" "$admin_email" "$hostname_srv" "$dominio" "$ip_srv"
-            info "Subdominio creado: ${sub_fqdn} -> ${sub_file}"
-
-            # Bloque de zona en named.conf.local
-            emit_zona "$sub_fqdn" "$sub_file" "master" "" "$red_cidr" >>"$named_local"
-
-            # --- DHCP: subnet block del subdominio (su propia red /24) ---
-            local sub_red=""
-            while true; do
-              input "  DHCP subdominio ${sub_fqdn} (FQDN) - Red en formato X.X.X.0/24" "" sub_red
-              [[ "$sub_red" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/24$ ]] && break
-              error "Formato inválido. Usa X.X.X.X/24"
-            done
-            emit_dhcp_subnet "$dhcpd_conf" "$sub_fqdn" "$sub_fqdn" "$sub_red" "$ip_srv" "no"
-            info "Bloque DHCP añadido para subdominio ${sub_fqdn} (${sub_red})."
-          done
+        input "Red #$r - Hostname del servidor DNS (sin dominio)" "serverddns" hostname_srv
+        while true; do
+          input "Red #$r - IP del servidor DNS (dentro de ${red_cidr})" "" ip_srv
+          if [[ "$ip_srv" =~ ^${oct1}\.${oct2}\.${oct3}\.([0-9]{1,3})$ ]]; then
+            last_octet="${BASH_REMATCH[1]}"
+            break
+          fi
+          error "La IP debe pertenecer a ${red_cidr}"
+        done
+        input "Red #$r - Email admin (formato DNS, ej: admin.${dominio})" "admin.${dominio}" admin_email
+        if yesno "¿Añadir alias CNAME para ${hostname_srv}?"; then
+          input "  Nombre del alias" "" cname_alias
         fi
-      fi
-    fi
 
-    info "Zonas añadidas red #$r: ${dominio} (${rol_d}) y ${zona_inversa} (${rol_i})"
+        if [[ "$rol_d" == "master" ]]; then
+          emit_file_directa "$file_directa" "$dominio" "$admin_email" "$hostname_srv" "$ip_srv" "$cname_alias"
+          info "Fichero de zona directa creado: $file_directa"
+          verificar_zona "$dominio" "$file_directa"
+        fi
+        if [[ "$rol_i" == "master" ]]; then
+          emit_file_inversa "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio" "$last_octet"
+          info "Fichero de zona inversa creado: $file_inversa"
+          verificar_zona "$zona_inversa" "$file_inversa"
+        fi
+
+        # Registrar padre para subdominios posteriores
+        padre_hostname["$dominio"]="$hostname_srv"
+        padre_ip["$dominio"]="$ip_srv"
+        padre_admin["$dominio"]="$admin_email"
+
+        emit_dhcp_subnet "$dhcpd_conf" "$dominio" "$dominio" "$red_cidr" "$ip_srv" "yes"
+        info "Bloque DHCP añadido para ${dominio} (${red_cidr})."
+      else
+        info "Red ${dominio} es slave en ambas zonas; se omite DHCP."
+      fi
+
+      info "Red #$r procesada: padre ${dominio} (${red_cidr})."
+    else
+      # --- Subdominio ---
+      if ((${#padre_hostname[@]} == 0)); then
+        error "No hay dominios padre declarados todavía. Declara primero un padre."
+        return 1
+      fi
+      echo "Dominios padre declarados: ${!padre_hostname[*]}"
+      local dominio_padre=""
+      while true; do
+        input "Red #$r - ¿De qué dominio padre depende? (FQDN)" "" dominio_padre
+        [[ -n "${padre_hostname[$dominio_padre]:-}" ]] && break
+        error "Padre desconocido. Disponibles: ${!padre_hostname[*]}"
+      done
+
+      local sub_name=""
+      while true; do
+        input "Red #$r - Nombre del subdominio - SOLO el nombre, no el FQDN (ej: dpto101)" "" sub_name
+        [[ -n "$sub_name" ]] && break
+        error "Vacío."
+      done
+
+      local sub_fqdn="${sub_name}.${dominio_padre}"
+      local sub_file="${ddns_dir}/db.${sub_fqdn}"
+      local hostname_srv="${padre_hostname[$dominio_padre]}"
+      local ip_srv="${padre_ip[$dominio_padre]}"
+      local admin_email="${padre_admin[$dominio_padre]}"
+
+      # Directa del subdominio
+      emit_zona "$sub_fqdn" "$sub_file" "master" "" "$red_cidr" >>"$named_local"
+      emit_file_subdominio "$sub_file" "$sub_fqdn" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_srv"
+      info "Subdominio creado: ${sub_fqdn} -> ${sub_file}"
+      verificar_zona "$sub_fqdn" "$sub_file"
+
+      # Inversa del subdominio (stub SOA+NS; DDNS añadirá PTRs)
+      emit_zona "$zona_inversa" "$file_inversa" "master" "" "$red_cidr" >>"$named_local"
+      emit_file_inversa_sub "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio_padre"
+      info "Inversa subdominio creada: $file_inversa"
+      verificar_zona "$zona_inversa" "$file_inversa"
+
+      emit_dhcp_subnet "$dhcpd_conf" "$sub_fqdn" "$sub_fqdn" "$red_cidr" "$ip_srv" "no"
+      info "Bloque DHCP añadido para subdominio ${sub_fqdn} (${red_cidr})."
+
+      info "Red #$r procesada: subdominio ${sub_fqdn} (${red_cidr})."
+    fi
   done
 
   info "Configuración de zonas escrita en $named_local"
@@ -1069,7 +1146,7 @@ establecer_vlan() {
     local search_for_iface=""
     if yesno "¿Configurar nameservers para $base_iface?"; then
       pedir_nameservers ns_for_iface
-      input "Dominios de búsqueda para $base_iface (separados por espacios, vacío para omitir)" "" search_for_iface
+      input "Dominios de búsqueda para $base_iface (FQDN, ej: dpto101.empresa.org empresa.org; separados por espacios, vacío para omitir)" "" search_for_iface
     fi
     iface_ns["$base_iface"]="$ns_for_iface"
     iface_search["$base_iface"]="$search_for_iface"

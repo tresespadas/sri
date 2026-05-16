@@ -890,7 +890,7 @@ EOF
       # Subdominios delegados (solo si la directa es master)
       if [[ "$rol_d" == "master" ]]; then
         local subs_raw=""
-        input "Subdominios delegados de ${dominio} (separados por espacios, vacío para omitir)" "" subs_raw
+        input "Subdominios delegados de ${dominio} - SOLO el nombre, no el FQDN (ej: dpto101 dpto202; vacío para omitir)" "" subs_raw
         if [[ -n "$subs_raw" ]]; then
           local -a subs_arr=()
           read -ra subs_arr <<<"$subs_raw"
@@ -907,7 +907,7 @@ EOF
             # --- DHCP: subnet block del subdominio (su propia red /24) ---
             local sub_red=""
             while true; do
-              input "  DHCP subdominio ${sub_fqdn} - Red en formato X.X.X.0/24" "" sub_red
+              input "  DHCP subdominio ${sub_fqdn} (FQDN) - Red en formato X.X.X.0/24" "" sub_red
               [[ "$sub_red" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/24$ ]] && break
               error "Formato inválido. Usa X.X.X.X/24"
             done

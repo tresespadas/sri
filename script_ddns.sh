@@ -468,8 +468,9 @@ EOF
 }
 
 # Generar fichero de zona inversa para un subdominio (SOA + NS y, si la IP del
-# servidor DNS cae dentro de la /24 del subdominio, su PTR estático).
-# Uso: emit_file_inversa_sub <out_file> <zona_inversa> <admin> <hostname_padre> <dominio_padre> <ip_dns>
+# servidor DNS cae dentro de la /24 del subdominio, su PTR estático apuntando
+# al FQDN del servidor DENTRO del subdominio).
+# Uso: emit_file_inversa_sub <out_file> <zona_inversa> <admin> <hostname_padre> <dominio_padre> <ip_dns> <sub_fqdn>
 emit_file_inversa_sub() {
   local out_file="$1"
   local zona_inversa="$2"
@@ -477,6 +478,7 @@ emit_file_inversa_sub() {
   local hostname="$4"
   local dominio="$5"
   local ip_dns="${6:-}"
+  local sub_fqdn="${7:-}"
   local serial
   serial="$(date +%Y%m%d)01"
 
@@ -509,8 +511,8 @@ EOF
       local last="${BASH_REMATCH[1]}"
       cat >>"$out_file" <<EOF
 
-;REGISTRO PTR del servidor DNS
-${last}    IN    PTR    ${hostname}.${dominio}.
+;REGISTROS TIPO PTR. Declaracion de HOSTS - DECLARAR SERVIDOR TAMBIEN.
+${last}    IN    PTR    ${hostname}.${sub_fqdn}.
 EOF
     fi
   fi
@@ -1003,7 +1005,7 @@ EOF
 
       # Inversa del subdominio (stub SOA+NS; DDNS añadirá PTRs)
       emit_zona "$zona_inversa" "$file_inversa" "master" "" "$red_cidr" >>"$named_local"
-      emit_file_inversa_sub "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_srv"
+      emit_file_inversa_sub "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_srv" "$sub_fqdn"
       info "Inversa subdominio creada: $file_inversa"
       verificar_zona "$zona_inversa" "$file_inversa"
 

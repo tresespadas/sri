@@ -433,7 +433,7 @@ EOF
 }
 
 # Generar fichero de zona para un subdominio delegado (apex = subdominio).
-# Uso: emit_file_subdominio <out_file> <sub_fqdn> <admin> <hostname_padre> <dominio_padre> <ip>
+# Uso: emit_file_subdominio <out_file> <sub_fqdn> <admin> <hostname_padre> <dominio_padre> <ip> [<alias>]
 emit_file_subdominio() {
   local out_file="$1"
   local sub_fqdn="$2"
@@ -441,10 +441,12 @@ emit_file_subdominio() {
   local hostname="$4"
   local dominio="$5"
   local ip="$6"
+  local alias="${7:-}"
   local serial
   serial="$(date +%Y%m%d)01"
 
-  cat >"$out_file" <<EOF
+  {
+    cat <<EOF
 ;
 ; BIND data file for ${sub_fqdn}
 ;
@@ -462,9 +464,17 @@ emit_file_subdominio() {
 ; REGISTROS NS. Servidor DNS dentro del subdominio.
 @        IN    NS    ${hostname}.${sub_fqdn}.
 
-;REGISTROS TIPO A: apex del subdominio.
-@        IN    A    ${ip}
+;REGISTROS TIPO A: Lista de Equipos de la red.
+${hostname}    IN    A    ${ip}
 EOF
+    if [[ -n "$alias" ]]; then
+      cat <<EOF
+
+;REGISTROS CNAME: ALIAS.
+${alias}    IN    CNAME    ${hostname}
+EOF
+    fi
+  } >"$out_file"
 }
 
 # Generar fichero de zona inversa para un subdominio (SOA + NS y, si la IP del
@@ -1007,9 +1017,14 @@ EOF
         error "La IP debe pertenecer a ${red_cidr}"
       done
 
+      local cname_alias_sub=""
+      if yesno "¿Añadir alias CNAME para ${hostname_srv} en ${sub_fqdn}?"; then
+        input "  Nombre del alias" "" cname_alias_sub
+      fi
+
       # Directa del subdominio
       emit_zona "$sub_fqdn" "$sub_file" "master" "" "$red_cidr" >>"$named_local"
-      emit_file_subdominio "$sub_file" "$sub_fqdn" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_dns_sub"
+      emit_file_subdominio "$sub_file" "$sub_fqdn" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_dns_sub" "$cname_alias_sub"
       info "Subdominio creado: ${sub_fqdn} -> ${sub_file}"
       verificar_zona "$sub_fqdn" "$sub_file"
 

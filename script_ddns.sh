@@ -556,7 +556,7 @@ emit_dhcp_header() {
 ##############################################################################
 
 # CONFIGURACION DDNS
-ddns-update on;
+ddns-updates on;
 update-static-leases on;
 ddns-update-style interim;
 ignore client-updates;

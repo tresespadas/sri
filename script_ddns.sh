@@ -770,7 +770,6 @@ emit_dhcp_subnet() {
 }
 
 configurar_ddns() {
-  clear
   local dhcpd_conf="/etc/dhcp/dhcpd.conf"
   local named_local="/etc/bind/named.conf.local"
   local ddns_dir="/etc/bind/ddns"
@@ -796,6 +795,8 @@ configurar_ddns() {
   else
     info "$named_local no existe todavía; se omite la copia de seguridad."
   fi
+
+  clear
 
   info "Creando directorio de zonas DDNS: $ddns_dir"
   mkdir -p "$ddns_dir"
@@ -994,22 +995,31 @@ EOF
       local sub_fqdn="${sub_name}.${dominio_padre}"
       local sub_file="${ddns_dir}/db.${sub_fqdn}"
       local hostname_srv="${padre_hostname[$dominio_padre]}"
-      local ip_srv="${padre_ip[$dominio_padre]}"
       local admin_email="${padre_admin[$dominio_padre]}"
+
+      # IP del servidor DNS dentro de la /24 del subdominio (para PTR, A apex y DHCP)
+      local ip_dns_sub=""
+      while true; do
+        input "Red #$r - IP del DNS dentro de ${red_cidr}" "" ip_dns_sub
+        if [[ "$ip_dns_sub" =~ ^${oct1}\.${oct2}\.${oct3}\.[0-9]+$ ]]; then
+          break
+        fi
+        error "La IP debe pertenecer a ${red_cidr}"
+      done
 
       # Directa del subdominio
       emit_zona "$sub_fqdn" "$sub_file" "master" "" "$red_cidr" >>"$named_local"
-      emit_file_subdominio "$sub_file" "$sub_fqdn" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_srv"
+      emit_file_subdominio "$sub_file" "$sub_fqdn" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_dns_sub"
       info "Subdominio creado: ${sub_fqdn} -> ${sub_file}"
       verificar_zona "$sub_fqdn" "$sub_file"
 
-      # Inversa del subdominio (stub SOA+NS; DDNS añadirá PTRs)
+      # Inversa del subdominio (SOA + NS + PTR del servidor DNS)
       emit_zona "$zona_inversa" "$file_inversa" "master" "" "$red_cidr" >>"$named_local"
-      emit_file_inversa_sub "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_srv" "$sub_fqdn"
+      emit_file_inversa_sub "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_dns_sub" "$sub_fqdn"
       info "Inversa subdominio creada: $file_inversa"
       verificar_zona "$zona_inversa" "$file_inversa"
 
-      emit_dhcp_subnet "$dhcpd_conf" "$sub_fqdn" "$sub_fqdn" "$red_cidr" "$ip_srv" "no"
+      emit_dhcp_subnet "$dhcpd_conf" "$sub_fqdn" "$sub_fqdn" "$red_cidr" "$ip_dns_sub" "no"
       info "Bloque DHCP añadido para subdominio ${sub_fqdn} (${red_cidr})."
 
       info "Red #$r procesada: subdominio ${sub_fqdn} (${red_cidr})."

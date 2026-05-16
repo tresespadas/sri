@@ -459,8 +459,8 @@ emit_file_subdominio() {
             2419200        ; Expire
              604800 )    ; Negative Cache TTL
 ;
-; REGISTROS NS. Delegado al servidor DNS del dominio padre.
-@        IN    NS    ${hostname}.${dominio}.
+; REGISTROS NS. Servidor DNS dentro del subdominio.
+@        IN    NS    ${hostname}.${sub_fqdn}.
 
 ;REGISTROS TIPO A: apex del subdominio.
 @        IN    A    ${ip}
@@ -499,7 +499,7 @@ emit_file_inversa_sub() {
              604800 )    ; Negative Cache TTL
 
 ;REGISTROS TIPO NS.
-@    IN    NS    ${hostname}.${dominio}.
+@    IN    NS    ${hostname}.${sub_fqdn}.
 EOF
 
   # PTR del servidor DNS si su IP pertenece a la /24 de esta inversa

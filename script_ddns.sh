@@ -308,6 +308,50 @@ pedir_rol_zona() {
   eval "$ip_var='$ip_value'"
 }
 
+# Preguntar interfaces IPv4 para servir DHCP.
+# Uso: pedir_interfaces_dhcp <var_destino>
+pedir_interfaces_dhcp() {
+  local var_name="$1"
+  local -a disponibles=()
+  mapfile -t disponibles < <(ip -br a | awk 'NR>1 {print $1}' | grep -Ev '^(lo|ens18)$' || true)
+
+  if [[ ${#disponibles[@]} -eq 0 ]]; then
+    error "No se encontraron interfaces válidas para DHCP."
+    return 1
+  fi
+
+  echo "Interfaces detectadas:"
+  for i in "${!disponibles[@]}"; do
+    echo "  $((i + 1))) ${disponibles[$i]}"
+  done
+
+  local seleccion=""
+  while true; do
+    input "Interfaces IPv4 para DHCP (separadas por espacios)" "" seleccion
+    if [[ -z "$seleccion" ]]; then
+      error "Debes indicar al menos una interfaz."
+      continue
+    fi
+    local ok=1
+    local iface
+    for iface in $seleccion; do
+      local found=0
+      local d
+      for d in "${disponibles[@]}"; do
+        [[ "$d" == "$iface" ]] && { found=1; break; }
+      done
+      if [[ $found -eq 0 ]]; then
+        error "Interfaz '$iface' no existe en el sistema."
+        ok=0
+        break
+      fi
+    done
+    [[ $ok -eq 1 ]] && break
+  done
+
+  eval "$var_name='$seleccion'"
+}
+
 # Generar fichero de zona directa a partir de plantilla.
 # Uso: emit_file_directa <out_file> <dominio> <admin> <hostname> <ip> [<alias>]
 emit_file_directa() {
@@ -469,6 +513,211 @@ EOF
   fi
 }
 
+# Escribir la cabecera del fichero dhcpd.conf.
+# Uso: emit_dhcp_header <out_file>
+emit_dhcp_header() {
+  local out="$1"
+  cat >"$out" <<'EOF'
+##############################################################################
+# # # #                CONFIGURACION DHCP                                  # #
+##############################################################################
+
+# CONFIGURACION DDNS
+ddns-update on;
+update-static-leases on;
+ddns-update-style interim;
+ignore client-updates;
+deny client-updates;
+
+include "/etc/bind/ddns/rndc.key";
+EOF
+}
+
+# Pedir datos DHCP de una red y emitir el bloque subnet (más reservas como host).
+# Uso: emit_dhcp_subnet <out_file> <comentario_red> <dominio> <red_cidr_/24> <ip_dns_default> <authoritative_yes_no>
+emit_dhcp_subnet() {
+  local out="$1"
+  local comentario="$2"
+  local dominio="$3"
+  local red_cidr="$4"
+  local ip_dns_default="$5"
+  local authoritative="${6:-no}"
+
+  local oct1 oct2 oct3
+  if [[ "$red_cidr" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.[0-9]{1,3}/24$ ]]; then
+    oct1="${BASH_REMATCH[1]}"
+    oct2="${BASH_REMATCH[2]}"
+    oct3="${BASH_REMATCH[3]}"
+  else
+    error "Red inválida para DHCP: $red_cidr"
+    return 1
+  fi
+
+  local prefix="${oct1}.${oct2}.${oct3}"
+  local subnet="${prefix}.0"
+  local mascara="255.255.255.0"
+  local broadcast="${prefix}.255"
+  local zona_inversa="${oct3}.${oct2}.${oct1}.in-addr.arpa"
+
+  info "Datos DHCP para ${comentario} (${red_cidr}):"
+
+  local server_id=""
+  while true; do
+    input "  server-identifier" "${ip_dns_default}" server_id
+    [[ "$server_id" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && break
+    error "IP inválida."
+  done
+
+  local default_lease_h="" max_lease_h=""
+  while true; do
+    input "  default-lease-time (horas)" "24" default_lease_h
+    [[ "$default_lease_h" =~ ^[0-9]+$ ]] && ((default_lease_h > 0)) && break
+    error "Debe ser un entero positivo."
+  done
+  while true; do
+    input "  max-lease-time (horas)" "48" max_lease_h
+    [[ "$max_lease_h" =~ ^[0-9]+$ ]] && ((max_lease_h >= default_lease_h)) && break
+    error "Debe ser un entero >= default-lease-time."
+  done
+  local dlease=$((default_lease_h * 3600))
+  local mlease=$((max_lease_h * 3600))
+
+  local r_ini="" r_fin=""
+  while true; do
+    input "  Rango principal - último octeto INICIO" "10" r_ini
+    [[ "$r_ini" =~ ^[0-9]+$ ]] && ((r_ini >= 1 && r_ini <= 254)) && break
+    error "Octeto inválido (1-254)."
+  done
+  while true; do
+    input "  Rango principal - último octeto FIN" "200" r_fin
+    [[ "$r_fin" =~ ^[0-9]+$ ]] && ((r_fin >= r_ini && r_fin <= 254)) && break
+    error "Octeto inválido (>= ${r_ini} y <= 254)."
+  done
+
+  local excl_raw=""
+  input "  Exclusiones (octetos: 'a-b' o 'n' separados por espacios, vacío para ninguna)" "" excl_raw
+
+  local -a excl_pairs=()
+  if [[ -n "$excl_raw" ]]; then
+    local tok
+    for tok in $excl_raw; do
+      if [[ "$tok" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        excl_pairs+=("${BASH_REMATCH[1]} ${BASH_REMATCH[2]}")
+      elif [[ "$tok" =~ ^[0-9]+$ ]]; then
+        excl_pairs+=("$tok $tok")
+      else
+        error "Exclusión inválida '$tok' (se ignora)."
+      fi
+    done
+  fi
+
+  local -a sorted_excl=()
+  if ((${#excl_pairs[@]} > 0)); then
+    mapfile -t sorted_excl < <(printf '%s\n' "${excl_pairs[@]}" | sort -n -k1,1)
+  fi
+
+  local -a subranges=()
+  local cur=$r_ini
+  local pair s e
+  for pair in "${sorted_excl[@]}"; do
+    s="${pair% *}"
+    e="${pair#* }"
+    if ((s > cur)); then
+      subranges+=("$cur $((s - 1))")
+    fi
+    if ((e + 1 > cur)); then
+      cur=$((e + 1))
+    fi
+  done
+  if ((cur <= r_fin)); then
+    subranges+=("$cur $r_fin")
+  fi
+  if ((${#subranges[@]} == 0)); then
+    error "Las exclusiones dejan el rango vacío."
+    return 1
+  fi
+
+  local gw_oct=""
+  while true; do
+    input "  Gateway - último octeto" "1" gw_oct
+    [[ "$gw_oct" =~ ^[0-9]+$ ]] && ((gw_oct >= 1 && gw_oct <= 254)) && break
+    error "Octeto inválido (1-254)."
+  done
+
+  local -a reservas=()
+  if yesno "  ¿Añadir reservas (MAC -> IP fija)?"; then
+    while true; do
+      local res_host="" res_mac="" res_oct=""
+      input "    Reserva - hostname (vacío para terminar)" "" res_host
+      [[ -z "$res_host" ]] && break
+      while true; do
+        input "    Reserva - MAC (XX:XX:XX:XX:XX:XX)" "" res_mac
+        [[ "$res_mac" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] && break
+        error "MAC inválida."
+      done
+      while true; do
+        input "    Reserva - último octeto IP" "" res_oct
+        [[ "$res_oct" =~ ^[0-9]+$ ]] && ((res_oct >= 1 && res_oct <= 254)) && break
+        error "Octeto inválido (1-254)."
+      done
+      reservas+=("${res_host}|${res_mac}|${prefix}.${res_oct}")
+    done
+  fi
+
+  {
+    echo ""
+    echo "# CONFIGURACION RED: ${comentario}"
+    if [[ "$authoritative" == "yes" ]]; then
+      echo "authoritative;"
+      echo "log-facility local7;"
+      echo ""
+    fi
+    echo "subnet ${subnet} netmask ${mascara} {"
+    echo "    server-identifier ${server_id};"
+    echo "    default-lease-time ${dlease};"
+    echo "    max-lease-time ${mlease};"
+    local sr sr_s sr_e
+    for sr in "${subranges[@]}"; do
+      sr_s="${sr% *}"
+      sr_e="${sr#* }"
+      echo "    range ${prefix}.${sr_s} ${prefix}.${sr_e};"
+    done
+    echo "    option routers ${prefix}.${gw_oct};"
+    echo "    option domain-name \"${dominio}\";"
+    echo "    option domain-name-servers ${server_id};"
+    echo "    option broadcast-address ${broadcast};"
+    echo ""
+    echo "    ddns-domainname \"${dominio}\";"
+    echo "    ddns-rev-domainname \"in-addr.arpa.\";"
+    echo ""
+    echo "    zone ${dominio}."
+    echo "    {"
+    echo "        primary 127.0.0.1;"
+    echo "        key \"rndc-key\";"
+    echo "    }"
+    echo ""
+    echo "    zone ${zona_inversa}."
+    echo "    {"
+    echo "        primary 127.0.0.1;"
+    echo "        key \"rndc-key\";"
+    echo "    }"
+    echo "}"
+
+    local r r_host r_mac r_ip
+    for r in "${reservas[@]}"; do
+      r_host="${r%%|*}"
+      local rest="${r#*|}"
+      r_mac="${rest%%|*}"
+      r_ip="${rest##*|}"
+      echo ""
+      echo "host ${r_host} {"
+      echo "    hardware ethernet ${r_mac};"
+      echo "    fixed-address ${r_ip};"
+      echo "}"
+    done
+  } >>"$out"
+}
+
 configurar_ddns() {
   local dhcpd_conf="/etc/dhcp/dhcpd.conf"
   local named_local="/etc/bind/named.conf.local"
@@ -556,6 +805,10 @@ EOF
 EOF
   info "$named_local reseteado a cabecera limpia."
 
+  # --- dhcpd.conf: cabecera limpia (DDNS + include rndc.key) ---
+  emit_dhcp_header "$dhcpd_conf"
+  info "$dhcpd_conf reseteado a cabecera limpia."
+
   local num_redes
   while true; do
     input "¿Cuántas redes vas a configurar?" "" num_redes
@@ -630,6 +883,10 @@ EOF
         verificar_zona "$zona_inversa" "$file_inversa"
       fi
 
+      # --- DHCP: subnet block para la red principal ---
+      emit_dhcp_subnet "$dhcpd_conf" "$dominio" "$dominio" "$red_cidr" "$ip_srv" "yes"
+      info "Bloque DHCP añadido para red ${dominio} (${red_cidr})."
+
       # Subdominios delegados (solo si la directa es master)
       if [[ "$rol_d" == "master" ]]; then
         local subs_raw=""
@@ -644,11 +901,18 @@ EOF
             emit_file_subdominio "$sub_file" "$sub_fqdn" "$admin_email" "$hostname_srv" "$dominio" "$ip_srv"
             info "Subdominio creado: ${sub_fqdn} -> ${sub_file}"
 
-            # Delegación NS en el fichero del padre
-            echo "${sub}    IN    NS    ${hostname_srv}.${dominio}." >>"$file_directa"
-
             # Bloque de zona en named.conf.local
             emit_zona "$sub_fqdn" "$sub_file" "master" "" "$red_cidr" >>"$named_local"
+
+            # --- DHCP: subnet block del subdominio (su propia red /24) ---
+            local sub_red=""
+            while true; do
+              input "  DHCP subdominio ${sub_fqdn} - Red en formato X.X.X.0/24" "" sub_red
+              [[ "$sub_red" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/24$ ]] && break
+              error "Formato inválido. Usa X.X.X.X/24"
+            done
+            emit_dhcp_subnet "$dhcpd_conf" "$sub_fqdn" "$sub_fqdn" "$sub_red" "$ip_srv" "no"
+            info "Bloque DHCP añadido para subdominio ${sub_fqdn} (${sub_red})."
           done
         fi
       fi
@@ -679,7 +943,34 @@ EOF
   cp -a "$ddns_dir" "$backup_dir"
   info "Respaldo creado: $backup_dir"
 
-  # TODO DHCP: pedir subred, rango, router, dns y escribir $dhcpd_conf + /etc/default/isc-dhcp-server
+  # --- DHCP: interfaces IPv4 a servir ---
+  local dhcp_defaults="/etc/default/isc-dhcp-server"
+  local dhcp_ifaces=""
+  pedir_interfaces_dhcp dhcp_ifaces
+
+  if [[ -f "$dhcp_defaults" ]]; then
+    cp "$dhcp_defaults" "${dhcp_defaults}.bak_$(date +%F_%T)"
+    info "Copia de seguridad creada: ${dhcp_defaults}.bak_$(date +%F_%T)"
+  else
+    info "$dhcp_defaults no existe todavía; se creará."
+    touch "$dhcp_defaults"
+  fi
+
+  if grep -q '^INTERFACESv4=' "$dhcp_defaults"; then
+    sed -i "s|^INTERFACESv4=.*|INTERFACESv4=\"$dhcp_ifaces\"|" "$dhcp_defaults"
+  else
+    echo "INTERFACESv4=\"$dhcp_ifaces\"" >>"$dhcp_defaults"
+  fi
+  info "$dhcp_defaults: INTERFACESv4=\"$dhcp_ifaces\""
+
+  # --- Validación de dhcpd.conf ---
+  info "Verificando $dhcpd_conf con 'dhcpd -t'..."
+  if dhcpd -t -cf "$dhcpd_conf"; then
+    info "$dhcpd_conf OK."
+  else
+    error "dhcpd -t encontró errores en $dhcpd_conf. Revisa el fichero."
+  fi
+
   # TODO TSIG: integrar allow-update en bind con update en dhcpd
 }
 

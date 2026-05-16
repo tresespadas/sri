@@ -963,6 +963,32 @@ EOF
   fi
   info "$dhcp_defaults: INTERFACESv4=\"$dhcp_ifaces\""
 
+  # --- Desactivar AppArmor (perfiles bind9 y dhcpd) vía enlace simbólico ---
+  local apparmor_dir="/etc/apparmor.d"
+  local apparmor_disable_dir="${apparmor_dir}/disable"
+  if [[ -d "$apparmor_dir" ]]; then
+    mkdir -p "$apparmor_disable_dir"
+    local prof
+    for prof in usr.sbin.named usr.sbin.dhcpd; do
+      if [[ -f "${apparmor_dir}/${prof}" ]]; then
+        ln -sf "${apparmor_dir}/${prof}" "${apparmor_disable_dir}/${prof}"
+        info "AppArmor: enlace de desactivación creado en ${apparmor_disable_dir}/${prof}"
+        if command -v apparmor_parser >/dev/null 2>&1; then
+          if apparmor_parser -R "${apparmor_dir}/${prof}" 2>/dev/null; then
+            info "AppArmor: perfil ${prof} descargado."
+          fi
+        fi
+      else
+        info "AppArmor: perfil ${prof} no presente; se omite."
+      fi
+    done
+
+    info "Comprobación final de ${apparmor_disable_dir}:"
+    ls -la "$apparmor_disable_dir"
+  else
+    info "AppArmor no parece estar instalado ($apparmor_dir no existe); se omite."
+  fi
+
   # --- Validación de dhcpd.conf ---
   info "Verificando $dhcpd_conf con 'dhcpd -t'..."
   if dhcpd -t -cf "$dhcpd_conf"; then
@@ -970,6 +996,16 @@ EOF
   else
     error "dhcpd -t encontró errores en $dhcpd_conf. Revisa el fichero."
   fi
+
+  # --- Aviso final al usuario ---
+  echo
+  echo "================================================================="
+  echo " Configuración DDNS finalizada."
+  echo " Para aplicar los cambios, reinicia manualmente los servicios:"
+  echo "   systemctl restart isc-dhcp-server"
+  echo "   systemctl restart named.service"
+  echo "================================================================="
+  echo
 
   # TODO TSIG: integrar allow-update en bind con update en dhcpd
 }

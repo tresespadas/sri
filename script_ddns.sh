@@ -649,14 +649,7 @@ EOF
 
             # Bloque de zona en named.conf.local
             emit_zona "$sub_fqdn" "$sub_file" "master" "" "$red_cidr" >>"$named_local"
-
-            verificar_zona "$sub_fqdn" "$sub_file"
           done
-
-          # Re-validar el padre tras añadir las delegaciones NS
-          if [[ "$rol_d" == "master" ]]; then
-            verificar_zona "$dominio" "$file_directa"
-          fi
         fi
       fi
     fi

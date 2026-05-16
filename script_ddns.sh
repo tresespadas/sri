@@ -467,15 +467,16 @@ emit_file_subdominio() {
 EOF
 }
 
-# Generar fichero de zona inversa para un subdominio (stub: SOA + NS, sin PTR).
-# Se usa cuando la /24 del subdominio no contiene la IP del servidor DNS del padre.
-# Uso: emit_file_inversa_sub <out_file> <zona_inversa> <admin> <hostname_padre> <dominio_padre>
+# Generar fichero de zona inversa para un subdominio (SOA + NS y, si la IP del
+# servidor DNS cae dentro de la /24 del subdominio, su PTR estático).
+# Uso: emit_file_inversa_sub <out_file> <zona_inversa> <admin> <hostname_padre> <dominio_padre> <ip_dns>
 emit_file_inversa_sub() {
   local out_file="$1"
   local zona_inversa="$2"
   local admin="$3"
   local hostname="$4"
   local dominio="$5"
+  local ip_dns="${6:-}"
   local serial
   serial="$(date +%Y%m%d)01"
 
@@ -498,6 +499,21 @@ emit_file_inversa_sub() {
 ;REGISTROS TIPO NS.
 @    IN    NS    ${hostname}.${dominio}.
 EOF
+
+  # PTR del servidor DNS si su IP pertenece a la /24 de esta inversa
+  if [[ -n "$ip_dns" && "$zona_inversa" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.in-addr\.arpa$ ]]; then
+    local ro1="${BASH_REMATCH[1]}"
+    local ro2="${BASH_REMATCH[2]}"
+    local ro3="${BASH_REMATCH[3]}"
+    if [[ "$ip_dns" =~ ^${ro3}\.${ro2}\.${ro1}\.([0-9]+)$ ]]; then
+      local last="${BASH_REMATCH[1]}"
+      cat >>"$out_file" <<EOF
+
+;REGISTRO PTR del servidor DNS
+${last}    IN    PTR    ${hostname}.${dominio}.
+EOF
+    fi
+  fi
 }
 
 # Validar sintaxis de un fichero de zona con named-checkzone.
@@ -987,7 +1003,7 @@ EOF
 
       # Inversa del subdominio (stub SOA+NS; DDNS añadirá PTRs)
       emit_zona "$zona_inversa" "$file_inversa" "master" "" "$red_cidr" >>"$named_local"
-      emit_file_inversa_sub "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio_padre"
+      emit_file_inversa_sub "$file_inversa" "$zona_inversa" "$admin_email" "$hostname_srv" "$dominio_padre" "$ip_srv"
       info "Inversa subdominio creada: $file_inversa"
       verificar_zona "$zona_inversa" "$file_inversa"
 
